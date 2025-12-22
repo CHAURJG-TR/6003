@@ -1,0 +1,304 @@
+<!doctype html>
+<html lang="zh-TW" class="h-full">
+ <head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>抽籤系統</title>
+  <script src="/_sdk/element_sdk.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body {
+      box-sizing: border-box;
+    }
+    
+    @keyframes fadeIn {
+      from { opacity: 0; transform: scale(0.9); }
+      to { opacity: 1; transform: scale(1); }
+    }
+    
+    @keyframes spin {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+    
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.05); }
+    }
+    
+    .animate-fade-in {
+      animation: fadeIn 0.3s ease-out;
+    }
+    
+    .animate-spin-custom {
+      animation: spin 1s linear infinite;
+    }
+    
+    .result-appear {
+      animation: fadeIn 0.5s ease-out, pulse 0.5s ease-out 0.5s;
+    }
+  </style>
+  <style>@view-transition { navigation: auto; }</style>
+  <script src="/_sdk/data_sdk.js" type="text/javascript"></script>
+ </head>
+ <body class="h-full">
+  <div id="app" class="h-full w-full overflow-auto">
+   <div class="min-h-full w-full flex flex-col items-center justify-center p-8">
+    <div class="w-full max-w-2xl space-y-8"><!-- Header -->
+     <div class="text-center space-y-4">
+      <h1 id="page-title" class="text-5xl font-bold">🎰 抽籤系統</h1>
+      <p class="text-xl opacity-80">點擊按鈕開始抽籤</p>
+     </div><!-- Participants List -->
+     <div class="rounded-2xl p-8 shadow-lg space-y-4">
+      <div class="flex items-center justify-between">
+       <h2 class="text-2xl font-bold">參與者名單</h2><span id="participant-count" class="text-lg font-semibold px-4 py-2 rounded-full">20 ��</span>
+      </div>
+      <div id="participants-list" class="space-y-2 max-h-96 overflow-y-auto"><!-- Participants will be rendered here -->
+      </div>
+     </div><!-- Draw Button -->
+     <div class="text-center"><button id="draw-button" class="px-12 py-5 rounded-2xl font-bold text-2xl transition-all duration-200 hover:scale-105 active:scale-95 shadow-lg disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"> 🎲 <span id="draw-button-text">開始抽籤</span> </button>
+     </div><!-- Result Display -->
+     <div id="result-container" class="hidden rounded-2xl p-10 shadow-lg text-center space-y-4">
+      <p id="result-label" class="text-2xl font-semibold">🎉 抽中的是</p>
+      <div id="result-name" class="text-5xl font-bold py-6"></div>
+     </div>
+    </div>
+   </div>
+  </div>
+  <script>
+    const defaultConfig = {
+      background_color: "#f0f4ff",
+      surface_color: "#ffffff",
+      text_color: "#1e293b",
+      primary_action_color: "#3b82f6",
+      secondary_action_color: "#ef4444",
+      font_family: "system-ui",
+      font_size: 16,
+      page_title: "🎰 抽籤系統",
+      draw_button_text: "開始抽籤",
+      result_label: "🎉 抽中的是"
+    };
+
+    const participants = [
+      { id: 1, name: "1號吳哲賢" },
+      { id: 2, name: "2號李政穎" },
+      { id: 3, name: "3號陳竑諶" },
+      { id: 4, name: "4號柯羿辰" },
+      { id: 5, name: "5號謝承叡" },
+      { id: 6, name: "6號王裕睿" },
+      { id: 7, name: "7號陳秉謙" },
+      { id: 8, name: "8號軒轅承孺" },
+      { id: 9, name: "9號林楷倫" },
+      { id: 10, name: "10號王利帆" },
+      { id: 11, name: "11號林若妘" },
+      { id: 12, name: "12號陳語菲" },
+      { id: 13, name: "13號莊苡琳" },
+      { id: 14, name: "14號林語紓" },
+      { id: 15, name: "15號林海薇" },
+      { id: 16, name: "16號謝宜庭" },
+      { id: 17, name: "17號賴泇伃" },
+      { id: 18, name: "18號陳姸蓁" },
+      { id: 19, name: "19號魏芷翎" },
+      { id: 20, name: "20號游采璇" }
+    ];
+
+    let isDrawing = false;
+
+    async function init() {
+      renderParticipantsList();
+      setupEventListeners();
+      await window.elementSdk.init({
+        defaultConfig,
+        onConfigChange,
+        mapToCapabilities,
+        mapToEditPanelValues
+      });
+    }
+
+    function setupEventListeners() {
+      document.getElementById('draw-button').addEventListener('click', handleDraw);
+    }
+
+    function renderParticipantsList() {
+      const container = document.getElementById('participants-list');
+      container.innerHTML = '';
+      
+      participants.forEach(participant => {
+        const div = document.createElement('div');
+        div.className = 'flex items-center px-4 py-3 rounded-xl animate-fade-in';
+        div.innerHTML = `
+          <span class="participant-name text-lg font-medium">${participant.name}</span>
+        `;
+        container.appendChild(div);
+      });
+    }
+
+    async function handleDraw() {
+      if (isDrawing) return;
+
+      isDrawing = true;
+      const drawButton = document.getElementById('draw-button');
+      const resultContainer = document.getElementById('result-container');
+      const resultName = document.getElementById('result-name');
+
+      drawButton.disabled = true;
+      resultContainer.classList.add('hidden');
+
+      // Enhanced random drawing animation with variable speed
+      let iterations = 0;
+      const baseIterations = 35 + Math.floor(Math.random() * 20); // 35-55 iterations
+      let currentDelay = 50;
+      
+      const drawFrame = () => {
+        const randomIndex = Math.floor(Math.random() * participants.length);
+        resultName.textContent = participants[randomIndex].name;
+        
+        if (!resultContainer.classList.contains('hidden')) {
+          resultContainer.classList.remove('result-appear');
+          void resultContainer.offsetWidth;
+        }
+        
+        resultContainer.classList.remove('hidden');
+        iterations++;
+
+        // Gradually slow down the animation
+        if (iterations < baseIterations) {
+          currentDelay = 50 + (iterations * 3);
+          setTimeout(drawFrame, currentDelay);
+        } else {
+          finalizeDrawing();
+        }
+      };
+      
+      drawFrame();
+    }
+
+    function finalizeDrawing() {
+      const resultContainer = document.getElementById('result-container');
+      const resultName = document.getElementById('result-name');
+      const drawButton = document.getElementById('draw-button');
+      
+      // Use crypto.getRandomValues for better randomness
+      const randomArray = new Uint32Array(1);
+      crypto.getRandomValues(randomArray);
+      const winnerIndex = randomArray[0] % participants.length;
+      
+      resultName.textContent = participants[winnerIndex].name;
+      
+      resultContainer.classList.add('result-appear');
+
+      setTimeout(() => {
+        isDrawing = false;
+        drawButton.disabled = false;
+      }, 1000);
+    }
+
+    async function onConfigChange(config) {
+      const baseSize = config.font_size || defaultConfig.font_size;
+      const customFont = config.font_family || defaultConfig.font_family;
+      const baseFontStack = 'system-ui, -apple-system, sans-serif';
+      const fontFamily = `${customFont}, ${baseFontStack}`;
+
+      document.body.style.backgroundColor = config.background_color || defaultConfig.background_color;
+      document.body.style.color = config.text_color || defaultConfig.text_color;
+      document.body.style.fontFamily = fontFamily;
+
+      const surfaces = document.querySelectorAll('.rounded-2xl, .rounded-xl');
+      surfaces.forEach(el => {
+        if (!el.id.includes('button')) {
+          el.style.backgroundColor = config.surface_color || defaultConfig.surface_color;
+          el.style.color = config.text_color || defaultConfig.text_color;
+        }
+      });
+
+      const drawButton = document.getElementById('draw-button');
+      drawButton.style.backgroundColor = config.primary_action_color || defaultConfig.primary_action_color;
+      drawButton.style.color = '#ffffff';
+
+      const participantCount = document.getElementById('participant-count');
+      participantCount.style.backgroundColor = config.surface_color || defaultConfig.surface_color;
+      participantCount.style.color = config.text_color || defaultConfig.text_color;
+      participantCount.style.border = `2px solid ${config.primary_action_color || defaultConfig.primary_action_color}`;
+
+      document.getElementById('page-title').textContent = config.page_title || defaultConfig.page_title;
+      document.getElementById('page-title').style.fontSize = `${baseSize * 3.125}px`;
+      document.getElementById('page-title').style.color = config.text_color || defaultConfig.text_color;
+      
+      document.getElementById('draw-button-text').textContent = config.draw_button_text || defaultConfig.draw_button_text;
+      document.getElementById('result-label').textContent = config.result_label || defaultConfig.result_label;
+
+      document.querySelectorAll('h1').forEach(el => el.style.fontSize = `${baseSize * 3.125}px`);
+      document.querySelectorAll('h2').forEach(el => el.style.fontSize = `${baseSize * 1.5}px`);
+      document.querySelectorAll('p, span, label, button').forEach(el => {
+        if (!el.id || el.id !== 'page-title') {
+          el.style.fontSize = `${baseSize}px`;
+        }
+      });
+      
+      const resultName = document.getElementById('result-name');
+      resultName.style.fontSize = `${baseSize * 3.125}px`;
+      resultName.style.color = config.text_color || defaultConfig.text_color;
+    }
+
+    function mapToCapabilities(config) {
+      return {
+        recolorables: [
+          {
+            get: () => config.background_color || defaultConfig.background_color,
+            set: (value) => {
+              config.background_color = value;
+              window.elementSdk.setConfig({ background_color: value });
+            }
+          },
+          {
+            get: () => config.surface_color || defaultConfig.surface_color,
+            set: (value) => {
+              config.surface_color = value;
+              window.elementSdk.setConfig({ surface_color: value });
+            }
+          },
+          {
+            get: () => config.text_color || defaultConfig.text_color,
+            set: (value) => {
+              config.text_color = value;
+              window.elementSdk.setConfig({ text_color: value });
+            }
+          },
+          {
+            get: () => config.primary_action_color || defaultConfig.primary_action_color,
+            set: (value) => {
+              config.primary_action_color = value;
+              window.elementSdk.setConfig({ primary_action_color: value });
+            }
+          }
+        ],
+        borderables: [],
+        fontEditable: {
+          get: () => config.font_family || defaultConfig.font_family,
+          set: (value) => {
+            config.font_family = value;
+            window.elementSdk.setConfig({ font_family: value });
+          }
+        },
+        fontSizeable: {
+          get: () => config.font_size || defaultConfig.font_size,
+          set: (value) => {
+            config.font_size = value;
+            window.elementSdk.setConfig({ font_size: value });
+          }
+        }
+      };
+    }
+
+    function mapToEditPanelValues(config) {
+      return new Map([
+        ["page_title", config.page_title || defaultConfig.page_title],
+        ["draw_button_text", config.draw_button_text || defaultConfig.draw_button_text],
+        ["result_label", config.result_label || defaultConfig.result_label]
+      ]);
+    }
+
+    init();
+  </script>
+ <script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'9b1c24aca0e3a367',t:'MTc2NjM3MDA2MC4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+</html>
