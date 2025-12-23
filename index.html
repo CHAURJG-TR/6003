@@ -3,7 +3,7 @@
  <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>抽籤系統</title>
+  <title>抽籤轉盤</title>
   <script src="/_sdk/element_sdk.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
@@ -16,26 +16,57 @@
       to { opacity: 1; transform: scale(1); }
     }
     
-    @keyframes spin {
-      from { transform: rotate(0deg); }
-      to { transform: rotate(360deg); }
-    }
-    
     @keyframes pulse {
       0%, 100% { transform: scale(1); }
       50% { transform: scale(1.05); }
+    }
+    
+    @keyframes slotRoll {
+      0% { transform: translateY(0); }
+      100% { transform: translateY(-50px); }
+    }
+    
+    @keyframes confetti {
+      0% { transform: translateY(0) rotate(0deg); opacity: 1; }
+      100% { transform: translateY(-100px) rotate(360deg); opacity: 0; }
+    }
+    
+    @keyframes glow {
+      0%, 100% { box-shadow: 0 0 20px rgba(59, 130, 246, 0.5), 0 0 40px rgba(59, 130, 246, 0.3); }
+      50% { box-shadow: 0 0 30px rgba(59, 130, 246, 0.8), 0 0 60px rgba(59, 130, 246, 0.5); }
     }
     
     .animate-fade-in {
       animation: fadeIn 0.3s ease-out;
     }
     
-    .animate-spin-custom {
-      animation: spin 1s linear infinite;
-    }
-    
     .result-appear {
       animation: fadeIn 0.5s ease-out, pulse 0.5s ease-out 0.5s;
+    }
+    
+    .slot-rolling {
+      animation: slotRoll 0.05s linear infinite;
+    }
+    
+    .slot-winner {
+      animation: pulse 0.8s ease-in-out 3, glow 2s ease-in-out infinite;
+    }
+    
+    .confetti {
+      position: fixed;
+      width: 10px;
+      height: 10px;
+      animation: confetti 2s ease-out forwards;
+      pointer-events: none;
+    }
+    
+    .participants-collapsed {
+      max-height: 0;
+      overflow: hidden;
+    }
+    
+    .participants-expanded {
+      max-height: 600px;
     }
   </style>
   <style>@view-transition { navigation: auto; }</style>
@@ -44,23 +75,44 @@
  <body class="h-full">
   <div id="app" class="h-full w-full overflow-auto">
    <div class="min-h-full w-full flex flex-col items-center justify-center p-8">
-    <div class="w-full max-w-2xl space-y-8"><!-- Header -->
+    <div class="w-full max-w-4xl space-y-8"><!-- Header -->
      <div class="text-center space-y-4">
-      <h1 id="page-title" class="text-5xl font-bold">🎰 抽籤系統</h1>
-      <p class="text-xl opacity-80">點擊按鈕開始抽籤</p>
-     </div><!-- Participants List -->
-     <div class="rounded-2xl p-8 shadow-lg space-y-4">
-      <div class="flex items-center justify-between">
-       <h2 class="text-2xl font-bold">參與者名單</h2><span id="participant-count" class="text-lg font-semibold px-4 py-2 rounded-full">20人</span>
-      </div>
-      <div id="participants-list" class="space-y-2 max-h-96 overflow-y-auto"><!-- Participants will be rendered here -->
+      <h1 id="page-title" class="text-5xl font-bold">🎡 抽籤轉盤</h1>
+      <p class="text-xl opacity-80">點擊按鈕開始抽籤，名字會像老虎機一樣滾動！</p>
+     </div><!-- Slot Machine Display -->
+     <div class="rounded-2xl p-8 shadow-lg">
+      <div class="flex flex-col items-center"><!-- Slot Machine Name Display -->
+       <div class="relative">
+        <div id="slot-display" class="px-16 py-10 rounded-3xl shadow-2xl text-center overflow-hidden relative" style="min-width: 400px; min-height: 150px;">
+         <div class="absolute inset-0 opacity-10 pointer-events-none">
+          <div class="absolute top-0 left-0 right-0 h-12 bg-gradient-to-b from-black to-transparent"></div>
+          <div class="absolute bottom-0 left-0 right-0 h-12 bg-gradient-to-t from-black to-transparent"></div>
+         </div>
+         <div id="slot-name" class="text-6xl font-bold relative z-10 transition-all duration-100">
+          準備開始
+         </div>
+        </div>
+        <div class="absolute -top-4 -left-4 text-6xl">
+         🎰
+        </div>
+        <div class="absolute -top-4 -right-4 text-6xl">
+         🎰
+        </div>
+       </div>
       </div>
      </div><!-- Draw Button -->
-     <div class="text-center"><button id="draw-button" class="px-12 py-5 rounded-2xl font-bold text-2xl transition-all duration-200 hover:scale-105 active:scale-95 shadow-lg disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"> 🎲 <span id="draw-button-text">開始抽籤</span> </button>
+     <div class="text-center"><button id="draw-button" class="px-12 py-5 rounded-2xl font-bold text-2xl transition-all duration-200 hover:scale-105 active:scale-95 shadow-lg disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"> 🎲 <span id="draw-button-text">開始����籤</span> </button>
      </div><!-- Result Display -->
      <div id="result-container" class="hidden rounded-2xl p-10 shadow-lg text-center space-y-4">
       <p id="result-label" class="text-2xl font-semibold">🎉 抽中的是</p>
       <div id="result-name" class="text-5xl font-bold py-6"></div>
+     </div><!-- Participants List (Collapsible) -->
+     <div class="rounded-2xl p-6 shadow-lg space-y-4"><button id="toggle-list" class="flex items-center justify-between w-full text-left hover:opacity-80 transition-opacity">
+       <div class="flex items-center gap-4">
+        <h2 class="text-2xl font-bold">📋 參與者名單</h2><span id="participant-count" class="text-sm font-semibold px-3 py-1 rounded-full">20 人</span>
+       </div><span id="toggle-icon" class="text-2xl transition-transform duration-300">���</span> </button>
+      <div id="participants-list" class="grid grid-cols-2 gap-2 participants-collapsed transition-all duration-500 ease-in-out overflow-hidden"><!-- Participants will be rendered here -->
+      </div>
      </div>
     </div>
    </div>
@@ -74,7 +126,7 @@
       secondary_action_color: "#ef4444",
       font_family: "system-ui",
       font_size: 16,
-      page_title: "🎰 抽籤系統",
+      page_title: "🎡 抽籤轉盤",
       draw_button_text: "開始抽籤",
       result_label: "🎉 抽中的是"
     };
@@ -103,31 +155,74 @@
     ];
 
     let isDrawing = false;
+    let isListExpanded = false;
+    const colors = ['#ef4444', '#f59e0b', '#10b981', '#3b82f6', '#8b5cf6', '#ec4899', '#f97316', '#14b8a6', '#6366f1', '#a855f7', '#84cc16', '#06b6d4', '#f43f5e', '#eab308', '#22c55e', '#0ea5e9', '#a855f7', '#d946ef', '#fb923c', '#facc15'];
 
     async function init() {
       renderParticipantsList();
       setupEventListeners();
-      await window.elementSdk.init({
-        defaultConfig,
-        onConfigChange,
-        mapToCapabilities,
-        mapToEditPanelValues
-      });
+      
+      if (window.elementSdk) {
+        await window.elementSdk.init({
+          defaultConfig,
+          onConfigChange,
+          mapToCapabilities,
+          mapToEditPanelValues
+        });
+      }
     }
 
     function setupEventListeners() {
       document.getElementById('draw-button').addEventListener('click', handleDraw);
+      document.getElementById('toggle-list').addEventListener('click', toggleParticipantsList);
+    }
+
+    function toggleParticipantsList() {
+      const list = document.getElementById('participants-list');
+      const icon = document.getElementById('toggle-icon');
+      isListExpanded = !isListExpanded;
+      
+      if (isListExpanded) {
+        list.classList.remove('participants-collapsed');
+        list.classList.add('participants-expanded');
+        icon.textContent = '▲';
+        icon.style.transform = 'rotate(180deg)';
+      } else {
+        list.classList.remove('participants-expanded');
+        list.classList.add('participants-collapsed');
+        icon.textContent = '▼';
+        icon.style.transform = 'rotate(0deg)';
+      }
+    }
+    
+    function createConfetti() {
+      const confettiColors = ['#ef4444', '#f59e0b', '#10b981', '#3b82f6', '#8b5cf6', '#ec4899'];
+      for (let i = 0; i < 50; i++) {
+        setTimeout(() => {
+          const confetti = document.createElement('div');
+          confetti.className = 'confetti';
+          confetti.style.left = Math.random() * window.innerWidth + 'px';
+          confetti.style.top = window.innerHeight / 2 + 'px';
+          confetti.style.backgroundColor = confettiColors[Math.floor(Math.random() * confettiColors.length)];
+          confetti.style.animationDelay = Math.random() * 0.3 + 's';
+          document.body.appendChild(confetti);
+          
+          setTimeout(() => confetti.remove(), 2000);
+        }, i * 20);
+      }
     }
 
     function renderParticipantsList() {
       const container = document.getElementById('participants-list');
       container.innerHTML = '';
       
-      participants.forEach(participant => {
+      participants.forEach((participant, index) => {
         const div = document.createElement('div');
-        div.className = 'flex items-center px-4 py-3 rounded-xl animate-fade-in';
+        div.className = 'flex items-center gap-2 px-3 py-2 rounded-lg animate-fade-in hover:scale-105 transition-transform';
+        div.style.animationDelay = `${index * 0.02}s`;
         div.innerHTML = `
-          <span class="participant-name text-lg font-medium">${participant.name}</span>
+          <div class="w-4 h-4 rounded-full flex-shrink-0" style="background-color: ${colors[index % colors.length]}"></div>
+          <span class="participant-name text-sm font-medium">${participant.name}</span>
         `;
         container.appendChild(div);
       });
@@ -140,57 +235,69 @@
       const drawButton = document.getElementById('draw-button');
       const resultContainer = document.getElementById('result-container');
       const resultName = document.getElementById('result-name');
+      const slotName = document.getElementById('slot-name');
+      const slotDisplay = document.getElementById('slot-display');
 
       drawButton.disabled = true;
       resultContainer.classList.add('hidden');
+      slotName.classList.remove('slot-winner');
 
-      // Enhanced random drawing animation with variable speed
-      let iterations = 0;
-      const baseIterations = 35 + Math.floor(Math.random() * 20); // 35-55 iterations
-      let currentDelay = 50;
-      
-      const drawFrame = () => {
-        const randomIndex = Math.floor(Math.random() * participants.length);
-        resultName.textContent = participants[randomIndex].name;
-        
-        if (!resultContainer.classList.contains('hidden')) {
-          resultContainer.classList.remove('result-appear');
-          void resultContainer.offsetWidth;
-        }
-        
-        resultContainer.classList.remove('hidden');
-        iterations++;
-
-        // Gradually slow down the animation
-        if (iterations < baseIterations) {
-          currentDelay = 50 + (iterations * 3);
-          setTimeout(drawFrame, currentDelay);
-        } else {
-          finalizeDrawing();
-        }
-      };
-      
-      drawFrame();
-    }
-
-    function finalizeDrawing() {
-      const resultContainer = document.getElementById('result-container');
-      const resultName = document.getElementById('result-name');
-      const drawButton = document.getElementById('draw-button');
-      
-      // Use crypto.getRandomValues for better randomness
+      // Use crypto for true randomness
       const randomArray = new Uint32Array(1);
       crypto.getRandomValues(randomArray);
       const winnerIndex = randomArray[0] % participants.length;
       
-      resultName.textContent = participants[winnerIndex].name;
+      // Random iteration count for variation (35-55 iterations)
+      const totalIterations = 35 + Math.floor(Math.random() * 21);
+      let currentIteration = 0;
+      let currentIndex = 0;
       
-      resultContainer.classList.add('result-appear');
-
-      setTimeout(() => {
-        isDrawing = false;
-        drawButton.disabled = false;
-      }, 1000);
+      // Slot machine animation with gradually increasing delay
+      function rollSlot() {
+        if (currentIteration < totalIterations) {
+          // Calculate delay - starts fast, gets progressively slower
+          const progress = currentIteration / totalIterations;
+          const delay = 30 + (progress * progress * 400); // Exponential slowdown
+          
+          // Show random name or converge to winner near the end
+          if (currentIteration < totalIterations - 5) {
+            currentIndex = Math.floor(Math.random() * participants.length);
+          } else {
+            // Last few iterations, show the winner
+            currentIndex = winnerIndex;
+          }
+          
+          slotName.textContent = participants[currentIndex].name;
+          
+          // Add visual feedback
+          slotName.style.transform = 'scale(1.1)';
+          setTimeout(() => {
+            slotName.style.transform = 'scale(1)';
+          }, 50);
+          
+          currentIteration++;
+          setTimeout(rollSlot, delay);
+        } else {
+          // Final winner reveal
+          slotName.textContent = participants[winnerIndex].name;
+          slotName.classList.add('slot-winner');
+          
+          // Show result below
+          setTimeout(() => {
+            resultName.textContent = participants[winnerIndex].name;
+            resultContainer.classList.remove('hidden');
+            resultContainer.classList.add('result-appear');
+            createConfetti();
+            
+            setTimeout(() => {
+              isDrawing = false;
+              drawButton.disabled = false;
+            }, 1000);
+          }, 800);
+        }
+      }
+      
+      rollSlot();
     }
 
     async function onConfigChange(config) {
@@ -203,13 +310,18 @@
       document.body.style.color = config.text_color || defaultConfig.text_color;
       document.body.style.fontFamily = fontFamily;
 
-      const surfaces = document.querySelectorAll('.rounded-2xl, .rounded-xl');
+      const surfaces = document.querySelectorAll('.rounded-2xl');
       surfaces.forEach(el => {
-        if (!el.id.includes('button')) {
-          el.style.backgroundColor = config.surface_color || defaultConfig.surface_color;
-          el.style.color = config.text_color || defaultConfig.text_color;
-        }
+        el.style.backgroundColor = config.surface_color || defaultConfig.surface_color;
+        el.style.color = config.text_color || defaultConfig.text_color;
       });
+
+      const slotDisplay = document.getElementById('slot-display');
+      slotDisplay.style.backgroundColor = config.surface_color || defaultConfig.surface_color;
+      slotDisplay.style.borderColor = config.primary_action_color || defaultConfig.primary_action_color;
+
+      const slotName = document.getElementById('slot-name');
+      slotName.style.color = config.text_color || defaultConfig.text_color;
 
       const drawButton = document.getElementById('draw-button');
       drawButton.style.backgroundColor = config.primary_action_color || defaultConfig.primary_action_color;
@@ -230,7 +342,7 @@
       document.querySelectorAll('h1').forEach(el => el.style.fontSize = `${baseSize * 3.125}px`);
       document.querySelectorAll('h2').forEach(el => el.style.fontSize = `${baseSize * 1.5}px`);
       document.querySelectorAll('p, span, label, button').forEach(el => {
-        if (!el.id || el.id !== 'page-title') {
+        if (!el.id || (el.id !== 'page-title' && el.id !== 'result-name' && el.id !== 'slot-name')) {
           el.style.fontSize = `${baseSize}px`;
         }
       });
@@ -247,28 +359,28 @@
             get: () => config.background_color || defaultConfig.background_color,
             set: (value) => {
               config.background_color = value;
-              window.elementSdk.setConfig({ background_color: value });
+              if (window.elementSdk) window.elementSdk.setConfig({ background_color: value });
             }
           },
           {
             get: () => config.surface_color || defaultConfig.surface_color,
             set: (value) => {
               config.surface_color = value;
-              window.elementSdk.setConfig({ surface_color: value });
+              if (window.elementSdk) window.elementSdk.setConfig({ surface_color: value });
             }
           },
           {
             get: () => config.text_color || defaultConfig.text_color,
             set: (value) => {
               config.text_color = value;
-              window.elementSdk.setConfig({ text_color: value });
+              if (window.elementSdk) window.elementSdk.setConfig({ text_color: value });
             }
           },
           {
             get: () => config.primary_action_color || defaultConfig.primary_action_color,
             set: (value) => {
               config.primary_action_color = value;
-              window.elementSdk.setConfig({ primary_action_color: value });
+              if (window.elementSdk) window.elementSdk.setConfig({ primary_action_color: value });
             }
           }
         ],
@@ -277,14 +389,14 @@
           get: () => config.font_family || defaultConfig.font_family,
           set: (value) => {
             config.font_family = value;
-            window.elementSdk.setConfig({ font_family: value });
+            if (window.elementSdk) window.elementSdk.setConfig({ font_family: value });
           }
         },
         fontSizeable: {
           get: () => config.font_size || defaultConfig.font_size,
           set: (value) => {
             config.font_size = value;
-            window.elementSdk.setConfig({ font_size: value });
+            if (window.elementSdk) window.elementSdk.setConfig({ font_size: value });
           }
         }
       };
@@ -300,5 +412,5 @@
 
     init();
   </script>
- <script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'9b1c24aca0e3a367',t:'MTc2NjM3MDA2MC4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+ <script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'9b2512e384c2844b',t:'MTc2NjQ2MzcwMy4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
 </html>
