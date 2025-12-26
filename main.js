@@ -80,3 +80,6 @@ play(click);
 play(roll);
 roll.pause();
 play(win);
+window.onclick = () => {
+  document.getElementById("click").play();
+};
